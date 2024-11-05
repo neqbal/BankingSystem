@@ -17,7 +17,7 @@ public class client extends Application{
     static PrintWriter out;
     Socket s;
     private static Scene scene;
-
+    private static Object lock = new Object();
     @Override
     public void start(Stage stage) throws IOException {
         scene = new Scene(loadFXML("login"));
@@ -53,15 +53,17 @@ public class client extends Application{
     }
 
     public static String ReadFromSocket() {
-        String request = null;
-        try {
-            System.out.println("Reading from socket");
-            request = in.readLine();
-            System.out.println(request);
-        } catch(IOException e) {
-            e.printStackTrace();
+        synchronized(lock) {
+            String request = null;
+            try {
+                System.out.println("Reading from socket");
+                request = in.readLine();
+                System.out.println(request);
+            } catch(IOException e) {
+                e.printStackTrace();
+            }
+            return request;
         }
-        return request;
     }
 
     public static void SendMessage(String command, Object o) {
@@ -78,4 +80,5 @@ public class client extends Application{
         
         System.out.println("Request sent");
     }
+
 }

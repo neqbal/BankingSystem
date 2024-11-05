@@ -1,6 +1,9 @@
 package com.example;
 
 import java.io.IOException;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
@@ -43,6 +46,9 @@ public class UserController {
     @FXML private TextField amountInput;
     @FXML private TextField receiver;
 
+/*     UserController() {
+        client.u = this;
+    } */
     @FXML private void handleMouseReleased(MouseEvent event) {
         String buttonID = ((Button) event.getSource()).getId();
         switch(buttonID) {
@@ -55,7 +61,7 @@ public class UserController {
                     if(str[0].equals("DEPOSITED")) {
                         displaySuccess("DEPOSITED");
                         updateDashBoard(str[1], str[2]);
-                    }
+                    } 
                 }
                 break;
             case "SAVINGDEPO":
@@ -68,7 +74,7 @@ public class UserController {
                     if(str[0].equals("DEPOSITED")) {
                         displaySuccess("DEPOSITED");
                         updateDashBoard(str[1], str[2]);
-                    }
+                    } 
                 }
                 break;
             case "LOGIN":
@@ -77,6 +83,12 @@ public class UserController {
                     String str[] = client.ReadFromSocket().split("/");
                     if(str[0].equals("WELCOME")) {
                         displayDashBoard((Stage) ((Button) event.getSource()).getScene().getWindow(), str);
+                        System.out.println("start listeneing");
+                        if(checkAmnt != null && savAmnt != null)
+                            //startListening();
+                            System.out.println("They are null");
+                        else 
+                            System.out.println("fuck you");
 
                     }
                 } catch(EmptyFieldException e) {
@@ -150,6 +162,20 @@ public class UserController {
         }
     }
 
+    public void startListening() {
+        ScheduledExecutorService ses = Executors.newScheduledThreadPool(1);
+        ses.scheduleAtFixedRate(() -> {
+            String updates = null;
+            System.out.println("requesting updates");
+            client.SendMessage("UPDATES", null);
+            updates = client.ReadFromSocket();
+            String parts[] = updates.split("/");
+
+            refreshDashBoard(parts[1], parts[2]);
+
+        }, 0, 5, TimeUnit.SECONDS);
+    }
+
     public void updateDashBoard(String place, String data) {
         switch(place) {
             case "CURRENT":
@@ -163,6 +189,17 @@ public class UserController {
                 });
                 break;
         }
+    } 
+
+    public void refreshDashBoard(String curr, String sv) {
+        Platform.runLater(() -> {
+            if(checkAmnt != null && savAmnt != null) {
+                checkAmnt.setText(curr);
+                savAmnt.setText(sv);
+            } else {
+                System.out.println("fields are null");
+            }
+        });
     }
 
     public void displayDashBoard(Stage currentStage, String[] str) {
@@ -177,6 +214,7 @@ public class UserController {
             c.checkAmnt.setText(str[4]);
             c.savAmnt.setText(str[5]);
             // Create a new scene with the loaded FXML layout
+            c.startListening();
             Scene homePageScene = new Scene(homePageRoot);
 
             Stage st = currentStage;

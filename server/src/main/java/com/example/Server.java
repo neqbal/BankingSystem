@@ -54,11 +54,11 @@ class ClientInfo {
         this.savAmount = Integer.parseInt(arr[4]);
     }
     void updateSavAmount(int n) {
-        savAmount = n;
+        savAmount += n;
     }
 
     void updateCurrAmount(int n) {
-        currAmount = n;
+        currAmount += n;
     }
 
     void updateLogs(String l) {
@@ -156,11 +156,20 @@ class ClientHandler implements Runnable {
                 Transfer(money, acc, receiver);
             }
                 break;
+            case "UPDATES":
+            {
+                Updates();
+            }
+                break;
             case "LOGOUT":
                 break;
         }
     }
 
+    public void Updates() {
+        System.out.println("Sending updates" + "UPDATES/" + ci.currAmount + "/" + ci.savAmount + "/");
+        SendMessage("UPDATES/" + ci.currAmount + "/" + ci.savAmount + "/");
+    }
     public void SendMessage(String post) {
         System.out.println("posting");
         out.println(post);
@@ -171,6 +180,11 @@ class ClientHandler implements Runnable {
         try {
             if(bankService.TransferQuerry(currUserID, money, acc, receiver)) {
                 SendMessage("TRANSFERED");
+                ci.updateCurrAmount(-money);
+                if(acc.equals("current"))
+                    Server.threadIdToClientHandler.get(Server.clientIdToThreadId.get(Integer.valueOf(receiver))).ci.updateCurrAmount(money);
+                else 
+                    Server.threadIdToClientHandler.get(Server.clientIdToThreadId.get(Integer.valueOf(receiver))).ci.updateSavAmount(money);
             }
         } catch(CannotTransferException | NoAccountException e) {
             SendMessage(e.getMessage());
@@ -217,12 +231,12 @@ class ClientHandler implements Runnable {
             switch(acc) {
                 case "CURRENT":
                     a = bankService.QuerryDeposit(currUserID ,"current", amnt);
-                    ci.updateCurrAmount(a);
+                    ci.updateCurrAmount(amnt);
                     SendMessage("DEPOSITED/" + acc + "/" + Integer.toString(ci.currAmount) + "/");
                     break;
                 case "SAVINGS":
                     a = bankService.QuerryDeposit(currUserID ,"savings", amnt);
-                    ci.updateSavAmount(a);
+                    ci.updateSavAmount(amnt);
                     SendMessage("DEPOSITED/" + acc + "/" + Integer.toString(ci.savAmount) + "/");
                     break;
             }
