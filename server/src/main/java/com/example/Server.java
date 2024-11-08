@@ -93,6 +93,7 @@ class ClientHandler implements Runnable {
             while (true) {
                 System.out.println("Waiting for client message");
                 if ((inputLine = in.readLine()) != null) {
+                    System.out.println("Received: " + inputLine);
                     ProcessClientMessage(inputLine);
                 } else {
                     break;
@@ -133,6 +134,7 @@ class ClientHandler implements Runnable {
                 ClientDeposit(parts[1], Integer.parseInt(parts[2]));
                 break;
             case "WITHDRAW":
+                System.out.println("Withdrawing");
                 handleWithdraw(parts[1], Integer.parseInt(parts[2]));
                 break;
             case "TRANSFER":
@@ -149,18 +151,15 @@ class ClientHandler implements Runnable {
 
     public void handleWithdraw(String account, int amount) {
         try {
-            int remainingBalance = bankService.QuerryWithdraw(currUserID, account, amount);
-            switch (account.toUpperCase()) {
-                case "CURRENT":
-                    ci.updateCurrAmount(-amount);
-                    SendMessage("WITHDRAWN/CURRENT/" + ci.currAmount);
-                    break;
-                case "SAVINGS":
-                    ci.updateSavAmount(-amount);
-                    SendMessage("WITHDRAWN/SAVINGS/" + ci.savAmount);
-                    break;
+            bankService.QuerryWithdraw(currUserID, account, amount);
+            System.out.println(account);
+            if ("CURRENT".equalsIgnoreCase(account)) {
+                ci.updateCurrAmount(-amount);
+                SendMessage("WITHDRAWN/CURRENT/" + ci.currAmount);
+            } else if ("SAVINGS".equalsIgnoreCase(account)) {
+                ci.updateSavAmount(-amount);
+                SendMessage("WITHDRAWN/SAVINGS/" + ci.savAmount);
             }
-            System.out.println("Withdrawn " + amount + " from " + account + " account.");
         } catch (CannotWithdrawException e) {
             SendMessage(e.getMessage());
         }

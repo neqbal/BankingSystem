@@ -36,6 +36,7 @@ public class UserController {
     @FXML private Label username;
     @FXML private Label dob;
     @FXML private Label email;
+    @FXML private Label account;
     @FXML private Label checkAmnt;
     @FXML private Label savAmnt;
     
@@ -51,6 +52,7 @@ public class UserController {
     } */
     @FXML private void handleMouseReleased(MouseEvent event) {
         String buttonID = ((Button) event.getSource()).getId();
+        System.out.println(buttonID);
         switch(buttonID) {
             case "CURRENTDEPO":
                 if(currentDepoInput.getText().isEmpty()) {
@@ -88,12 +90,6 @@ public class UserController {
                         client.ui.setUserId(str[6]);
                         displayDashBoard((Stage) ((Button) event.getSource()).getScene().getWindow(), str);
                         System.out.println("start listeneing");
-                        if(checkAmnt != null && savAmnt != null)
-                            //startListening();
-                            System.out.println("They are null");
-                        else 
-                            System.out.println("fuck you");
-
                     } else {
                         displayError(str[0]);
                     }
@@ -169,12 +165,31 @@ public class UserController {
                 }
                 break;
             
+            case "WITHDRAWPAGE":
+                try {
+                    Stage withdrawStage = new Stage();
+                    withdrawStage.setTitle("Withdraw");
+
+                    FXMLLoader loader = new FXMLLoader(getClass().getResource("withdraw.fxml"));
+                    Parent root = loader.load();
+
+                    UserController u = loader.getController();
+                    u.accountComboBox.setItems(FXCollections.observableArrayList("current", "savings"));
+                    Scene scene = new Scene(root);
+
+                    withdrawStage.setScene(scene);
+                    withdrawStage.show();
+                } catch(IOException e) {
+                    e.printStackTrace();
+                }
+                break;
             case "WITHDRAW":
-                try{
+                try {
                     WithdrawAmount();
                 } catch(EmptyFieldException e) {
                     displayError(e.getMessage());
                 }
+            break;
         }
     }
     
@@ -183,12 +198,21 @@ public class UserController {
             throw new EmptyFieldException("please fill in all the fields");
         }
 
+        if(Integer.parseInt(amountInput.getText()) <= 0) {
+            displayError("amnount cannot be negative");
+        }
+
         String money = amountInput.getText();
         String acc = accountComboBox.getValue();
-
-        client.SendMessage("WITHDRAW/", money+"/"+acc+"/");
-        String str = client.ReadFromSocket();
-
+        System.out.println("WITHDRAW/"+ acc+"/"+money+"/");
+        client.SendMessage("WITHDRAW/", acc+"/"+money+"/");
+        String str[] = client.ReadFromSocket().split("/");
+        System.out.println(str);
+        if(str != null && str[0].equals("WITHDRAWN")) {
+            displaySuccess(str[0]);
+        } else {
+            displayError(str[0]);
+        }
     }
     public void TransferAmount() throws EmptyFieldException {
         if(amountInput.getText().isEmpty() && accountComboBox.getValue() == null && receiver.getText().isEmpty()) {
@@ -267,7 +291,7 @@ public class UserController {
             c.email.setText(str[3]);
             c.checkAmnt.setText(str[4]);
             c.savAmnt.setText(str[5]);
-
+            c.account.setText(str[6]);
             System.out.println("printing user info" + client.ui.username + client.ui.userID);
             // Create a new scene with the loaded FXML layout
             c.startListening();
