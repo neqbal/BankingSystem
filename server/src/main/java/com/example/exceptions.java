@@ -51,3 +51,9 @@ class CannotTransferException extends Exception {
         super(msg);
     }
 }
+
+class CannotWithdrawException extends Exception {
+    CannotWithdrawException(String msg) {
+        super(msg);
+    }
+}

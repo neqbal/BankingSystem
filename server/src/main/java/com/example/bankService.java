@@ -9,13 +9,13 @@ public class bankService {
     private static database db = new database();
 
     public static boolean QuerryRegister(String username, String psswd, String dob, String email, String currAmnt, String savAmnt) throws CannotRegisterException {
-        System.out.println("Querrying client");
-        String querry = "INSERT INTO users (id, username, password, dob, email, current, savings, auth) VALUES (null, ?, ?, ?, ?, ?, ?, 0)";
+        System.out.println("Querying client");
+        String query = "INSERT INTO users (id, username, password, dob, email, current, savings, auth) VALUES (null, ?, ?, ?, ?, ?, ?, 0)";
         Connection con = null;
-        PreparedStatement pstmt=null;
+        PreparedStatement pstmt = null;
         try {
             con = db.getConnection();
-            pstmt = con.prepareStatement(querry);
+            pstmt = con.prepareStatement(query);
         } catch(Exception e) {
             e.printStackTrace();
             return false;
@@ -42,42 +42,35 @@ public class bankService {
         return true;
     } 
 
-    public static Integer QuerryLogin(String username, String psswd) throws CannotLoginException{
-        String querry = "SELECT * FROM users WHERE username = (?)";
+    public static Integer QuerryLogin(String username, String psswd) throws CannotLoginException {
+        if(!findReceiverUser(username)) throw new CannotLoginException("User does not exist");
+        String query = "SELECT * FROM users WHERE username = (?)";
         Connection con = null;
         String password = null;
         int id = 0, auth = 0;
 
         try {
             con = db.getConnection();
-            PreparedStatement pstmt = con.prepareStatement(querry);
-
+            PreparedStatement pstmt = con.prepareStatement(query);
             pstmt.setString(1, username);
             ResultSet res = pstmt.executeQuery();
             
             if(res.next()) {
-                password =  res.getString("password");
-                id = Integer.parseInt(res.getString("id"));
+                password = res.getString("password");
+                id = res.getInt("id");
                 auth = res.getInt("auth");
                 con.close();
-            } else {
-
             }
         } catch(Exception e) {
             e.printStackTrace();
             return 0;
         }
 
-    
         if(auth == 1) {
-            System.out.println("user already logged in ");
-            throw new CannotLoginException("user already logged in");
+            throw new CannotLoginException("User already logged in");
         }
 
-        System.out.println("checking password " + password + " jhsd " + psswd);
-        
         if(password.equals(psswd)) {
-            System.out.println("password correct");
             AuthenticateUser(id);    
             return id;
         } else {
@@ -88,10 +81,10 @@ public class bankService {
     public static boolean AuthenticateUser(int id) {
         boolean flag = false;
         try {
-            String querry = "UPDATE users SET auth = 1 WHERE id = (?)";
+            String query = "UPDATE users SET auth = 1 WHERE id = (?)";
             Connection con = db.getConnection();
-            PreparedStatement pstmt = con.prepareStatement(querry);
-            pstmt.setString(1, Integer.toString(id));
+            PreparedStatement pstmt = con.prepareStatement(query);
+            pstmt.setInt(1, id);
 
             if (pstmt.executeUpdate() > 0) {
                 flag = true;
@@ -100,24 +93,22 @@ public class bankService {
         } catch(Exception e) {
             e.printStackTrace();
         }
-
         return flag;
     }
 
     public static boolean DeAuthenticateUser(int id) {
-        System.out.println("deauthenticating user");
+        System.out.println("Deauthenticating user");
         try {
-            String querry = "UPDATE users SET auth = 0 WHERE id = (?)";
+            String query = "UPDATE users SET auth = 0 WHERE id = (?)";
             Connection con = db.getConnection();
-            PreparedStatement pstmt = con.prepareStatement(querry);
-            pstmt.setString(1, Integer.toString(id));
+            PreparedStatement pstmt = con.prepareStatement(query);
+            pstmt.setInt(1, id);
 
             if (pstmt.executeUpdate() > 0) {
                 con.close();
                 return true;
-            } else {
-                con.close();
             }
+            con.close();
         } catch(Exception e) {
             e.printStackTrace();
         }
@@ -126,66 +117,90 @@ public class bankService {
 
     public static String QuerryClientInfo(int id) {
         try {
-            String querry = "SELECT username, dob, email, current, savings FROM users WHERE id = (?)";
+            String query = "SELECT username, dob, email, current, savings FROM users WHERE id = (?)";
             Connection con = db.getConnection();
-            PreparedStatement pstmt = con.prepareStatement(querry);
-            pstmt.setString(1, Integer.toString(id));
+            PreparedStatement pstmt = con.prepareStatement(query);
+            pstmt.setInt(1, id);
             String str = null;
             ResultSet res = pstmt.executeQuery();
             if(res.next()) {
-                str =  res.getString("username") + "/" + res.getString("dob") + "/" + res.getString("email") + "/" + res.getString("current") + "/" + res.getString("savings") + "/";
+                str = res.getString("username") + "/" + res.getString("dob") + "/" + res.getString("email") + "/" + res.getInt("current") + "/" + res.getInt("savings") + "/";
             }
             con.close();
             return str;
         } catch(Exception e) {
             e.printStackTrace();
         }
-
         return "/";
     }
-    public static Integer QuerryDeposit(int id,String acc, int amnt) throws CannotDepositException{
-       String senderQuerry = "SELECT " + acc + " FROM users WHERE id = (?)";
-       String querry2 = "UPDATE users SET " + acc + " = (?) WHERE id = (?)";
-       Connection con = null;
-       int a = 0;
-       try {
-            con = db.getConnection();
-            PreparedStatement pstmt = con.prepareStatement(senderQuerry);
-            pstmt.setString(1, Integer.toString(id));
 
+    public static Integer QuerryDeposit(int id, String acc, int amnt) throws CannotDepositException {
+        String senderQuery = "SELECT " + acc + " FROM users WHERE id = (?)";
+        String updateQuery = "UPDATE users SET " + acc + " = (?) WHERE id = (?)";
+        Connection con = null;
+        int balance = 0;
+
+        try {
+            con = db.getConnection();
+            PreparedStatement pstmt = con.prepareStatement(senderQuery);
+            pstmt.setInt(1, id);
             ResultSet res = pstmt.executeQuery();
-            
             if(res.next()) {
-                a = Integer.valueOf(res.getString(1));
+                balance = res.getInt(1);
             }
 
-            PreparedStatement pstmt2 = con.prepareStatement(querry2);
-            pstmt2.setString(1, Integer.toString(a + amnt));
-            pstmt2.setString(2, Integer.toString(id));
-
+            PreparedStatement pstmt2 = con.prepareStatement(updateQuery);
+            pstmt2.setInt(1, balance + amnt);
+            pstmt2.setInt(2, id);
             pstmt2.executeUpdate();
             con.close();
-       } catch(Exception e) {
+        } catch(Exception e) {
             e.printStackTrace();
-            throw new CannotDepositException("cannot deposit");
-       }
-       return a+amnt;
+            throw new CannotDepositException("Cannot deposit");
+        }
+        return balance + amnt;
     }
 
-    public static double withdraw(String username, double amnt) {
-        return amnt;
+    public static Integer QuerryWithdraw(int id, String acc, int amnt) throws CannotWithdrawException {
+        String balanceQuery = "SELECT " + acc + " FROM users WHERE id = (?)";
+        String updateQuery = "UPDATE users SET " + acc + " = (?) WHERE id = (?)";
+        Connection con = null;
+        int balance = 0;
+
+        try {
+            con = db.getConnection();
+            PreparedStatement pstmt = con.prepareStatement(balanceQuery);
+            pstmt.setInt(1, id);
+            ResultSet res = pstmt.executeQuery();
+            if(res.next()) {
+                balance = res.getInt(1);
+            }
+
+            if (balance < amnt) {
+                throw new CannotWithdrawException("Insufficient funds for withdrawal");
+            }
+
+            PreparedStatement pstmt2 = con.prepareStatement(updateQuery);
+            pstmt2.setInt(1, balance - amnt);
+            pstmt2.setInt(2, id);
+            pstmt2.executeUpdate();
+            con.close();
+        } catch(Exception e) {
+            e.printStackTrace();
+            throw new CannotWithdrawException("Cannot withdraw funds");
+        }
+        return balance - amnt;
     }
 
     public static boolean findReceiverUser(String username) {
-        String querry = "SELECT username FROM users WHERE username= (?)";
+        String query = "SELECT username FROM users WHERE username= (?)";
         Connection con = null;
         boolean flag = false;
         try {
             con = db.getConnection();
-            PreparedStatement smnt = con.prepareStatement(querry);
-            smnt.setString(1, username);
-
-            ResultSet rs = smnt.executeQuery();
+            PreparedStatement pstmt = con.prepareStatement(query);
+            pstmt.setString(1, username);
+            ResultSet rs = pstmt.executeQuery();
             if(rs.next()) {
                 flag = true;
             }
@@ -196,54 +211,53 @@ public class bankService {
         return flag;
     }
 
-    public static boolean TransferQuerry(int id, int money, String acc, int receiver) throws CannotTransferException, NoAccountException{
-        String receiverExists = "SELECT current FROM users WHERE id = " + receiver;
+    public static boolean TransferQuerry(int id, int money, String acc, int receiver) throws CannotTransferException, NoAccountException {
+        String receiverExists = "SELECT current FROM users WHERE id = ?";
+        String checkSenderBalance = "SELECT " + acc + " FROM users WHERE id = ?";
+        String transfer = "BEGIN; " +
+                        "UPDATE users SET " + acc + " = " + acc + " - " + money + " WHERE id = "+id+"; " +
+                        "UPDATE users SET current = current + "+money+" WHERE id = "+receiver+"; " +
+                        "COMMIT;";
+        
         Connection con = null;
-        boolean b1 = false;
         try {
             con = db.getConnection();
-            Statement st = con.createStatement();
-            ResultSet res = st.executeQuery(receiverExists);
-            if(res.next()) {
-                b1 = true; 
-            }
-            con.close();
         } catch (Exception e) {
-
-        } 
-
-        if(!b1) throw new CannotTransferException("Account does not exist");
-
-        String checkSenderBalance = "SELECT " + acc + " FROM users WHERE id = " + id;
-        boolean b2 = false;
-        try {
-            con = db.getConnection();
-            Statement st = con.createStatement();
-            ResultSet res = st.executeQuery(checkSenderBalance);
-            if(res.next()) {
-                if(Integer.valueOf(res.getString(acc)) >= money ) {
-                    b2 = true;
-                }
-            }
-            con.close();
-        } catch (Exception e) {
-            e.printStackTrace();
-        } 
-
-        if(!b2) throw new CannotTransferException("Not enough funds");
-
-        String t = "BEGIN; " +
-                   "UPDATE users SET " + acc + " = " + acc + " - " + money + " WHERE id = " + id + " ; " +
-                   "UPDATE users SET current = current + " + money + " WHERE id = " + receiver + " ; " +
-                   "COMMIT;";
-        try {
-            con = db.getConnection();
-            Statement st = con.createStatement();
-            st.executeUpdate(t);
-        } catch(Exception e) {
             e.printStackTrace();
         }
 
+        PreparedStatement pstmt = null;
+        boolean flag1 = true;
+        boolean flag2 = true;
+        
+        try {
+            pstmt = con.prepareStatement(receiverExists);
+            pstmt.setInt(1, receiver);
+            ResultSet res = pstmt.executeQuery();
+            if (!res.next()) flag1 = false;
+
+            pstmt = con.prepareStatement(checkSenderBalance);
+            pstmt.setInt(1, id);
+            res = pstmt.executeQuery();
+            if (res.next() && res.getInt(1) < money) flag2 = false;
+
+            con.close();
+        } catch(Exception e) {
+            e.printStackTrace();
+            return false;
+        }
+
+        if(!flag1) throw new NoAccountException("Account does not exist");
+        if(!flag2) throw new CannotTransferException("Not enough funds");
+
+        try {
+            con = db.getConnection();
+            Statement st = con.createStatement();
+            st.executeUpdate(transfer);
+            con.close();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
         return true;
     }
 }

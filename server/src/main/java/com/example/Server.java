@@ -22,23 +22,24 @@ public class Server {
     private int clientCounter = 0;
     ExecutorService ex = Executors.newFixedThreadPool(BACKLOG);
 
-    void crerateServer() {
+    void createServer() {
         try {
             ss = new ServerSocket(PORT, BACKLOG);
             System.out.println("Server created on PORT " + PORT);
             
-            while(true) {
+            while (true) {
                 Socket s = ss.accept();
                 ClientHandler ch = new ClientHandler(s, clientCounter);
                 threadIdToClientHandler.put(clientCounter, ch);
                 clientCounter += 1;
-                ex.submit(ch);                
+                ex.submit(ch);
             }
         } catch (Exception e) {
             e.printStackTrace();
         }
     }
 }
+
 class ClientInfo {
     String username, dob, email;
     int savAmount;
@@ -46,13 +47,14 @@ class ClientInfo {
     List<String> log = new ArrayList<>();
 
     ClientInfo(String info) {
-        String arr[] = info.split("/");
+        String[] arr = info.split("/");
         this.username = arr[0];
         this.dob = arr[1];
         this.email = arr[2];
         this.currAmount = Integer.parseInt(arr[3]);
         this.savAmount = Integer.parseInt(arr[4]);
     }
+
     void updateSavAmount(int n) {
         savAmount += n;
     }
@@ -65,6 +67,7 @@ class ClientInfo {
         log.add(l);
     }
 }
+
 class ClientHandler implements Runnable {
     private Socket s;
     private BufferedReader in;
@@ -72,13 +75,14 @@ class ClientHandler implements Runnable {
     private Integer currUserID = null;
     private ClientInfo ci;
     private int ThreadID;
+
     ClientHandler(Socket s, int ThreadID) {
         this.s = s;
         this.ThreadID = ThreadID;
     }
 
     @Override
-    public void run(){
+    public void run() {
         try {
             in = new BufferedReader(new InputStreamReader(s.getInputStream()));
             out = new PrintWriter(s.getOutputStream(), true);
@@ -86,15 +90,15 @@ class ClientHandler implements Runnable {
             SendMessage("Connected");
 
             String inputLine;
-            while(true) {
+            while (true) {
                 System.out.println("Waiting for client message");
-                if((inputLine = in.readLine()) != null) {
+                if ((inputLine = in.readLine()) != null) {
                     ProcessClientMessage(inputLine);
                 } else {
                     break;
                 }
             }
-        } catch(IOException e) {
+        } catch (IOException e) {
             e.printStackTrace();
         } finally {
             CloseConnection();
@@ -103,146 +107,144 @@ class ClientHandler implements Runnable {
 
     public void CloseConnection() {
         try {
-            in.close();
-            out.close();
-            s.close();
-            if(currUserID != null) bankService.DeAuthenticateUser(currUserID);
+            if (in != null) in.close();
+            if (out != null) out.close();
+            if (s != null) s.close();
+            if (currUserID != null) bankService.DeAuthenticateUser(currUserID);
 
-            System.out.println(currUserID + " closed");
+            System.out.println(currUserID + " closed connection.");
         } catch (IOException e) {
             System.out.println("Error closing resources");
             e.printStackTrace();
         }
     }
+
     public void ProcessClientMessage(String inputLine) {
-        System.out.println(inputLine);
-        String parts[] = inputLine.split("/");
-        switch(parts[0]) {
-            case "REGISTER" :
-            {
-                String username = parts[1];
-                String psswd = parts[2];
-                String dob = parts[3];
-                String email = parts[4];
-                String currAmnt = parts[5];
-                String savAmnt = parts[6];
-                RegisterClient(username, psswd, dob, email, currAmnt, savAmnt);
-            }
+        System.out.println("Received: " + inputLine);
+        String[] parts = inputLine.split("/");
+        switch (parts[0]) {
+            case "REGISTER":
+                RegisterClient(parts[1], parts[2], parts[3], parts[4], parts[5], parts[6]);
                 break;
-            case "LOGIN": 
-            {
-                String username = parts[1];
-                String psswd = parts[2];
-                LoginClient(username, psswd);
-                String info = GetClientInfo();
-                ci = new ClientInfo(info);
-                SendMessage("WELCOME/" + info);
-            }
+            case "LOGIN":
+                LoginClient(parts[1], parts[2]);
                 break;
             case "DEPOSIT":
-            {
-                String account = parts[1];
-                String amount = parts[2];
-                ClientDeposit(account, Integer.parseInt(amount));
-            }
+                ClientDeposit(parts[1], Integer.parseInt(parts[2]));
                 break;
             case "WITHDRAW":
+                handleWithdraw(parts[1], Integer.parseInt(parts[2]));
                 break;
             case "TRANSFER":
-            {
-                int money = Integer.valueOf(parts[1]);
-                String acc = parts[2];
-                int receiver = Integer.valueOf(parts[3]);
-                Transfer(money, acc, receiver);
-            }
+                Transfer(Integer.parseInt(parts[1]), parts[2], Integer.parseInt(parts[3]));
                 break;
             case "UPDATES":
-            {
                 Updates();
-            }
                 break;
             case "LOGOUT":
+                handleLogout();
                 break;
         }
     }
 
-    public void Updates() {
-        System.out.println("Sending updates" + "UPDATES/" + ci.currAmount + "/" + ci.savAmount + "/");
-        SendMessage("UPDATES/" + ci.currAmount + "/" + ci.savAmount + "/");
-    }
-    public void SendMessage(String post) {
-        System.out.println("posting");
-        out.println(post);
-        System.out.println("posted");
+    public void handleWithdraw(String account, int amount) {
+        try {
+            int remainingBalance = bankService.QuerryWithdraw(currUserID, account, amount);
+            switch (account.toUpperCase()) {
+                case "CURRENT":
+                    ci.updateCurrAmount(-amount);
+                    SendMessage("WITHDRAWN/CURRENT/" + ci.currAmount);
+                    break;
+                case "SAVINGS":
+                    ci.updateSavAmount(-amount);
+                    SendMessage("WITHDRAWN/SAVINGS/" + ci.savAmount);
+                    break;
+            }
+            System.out.println("Withdrawn " + amount + " from " + account + " account.");
+        } catch (CannotWithdrawException e) {
+            SendMessage(e.getMessage());
+        }
     }
 
     public void Transfer(int money, String acc, int receiver) {
         try {
-            if(bankService.TransferQuerry(currUserID, money, acc, receiver)) {
-                SendMessage("TRANSFERED");
-                ci.updateCurrAmount(-money);
-                if(acc.equals("current"))
-                    Server.threadIdToClientHandler.get(Server.clientIdToThreadId.get(Integer.valueOf(receiver))).ci.updateCurrAmount(money);
-                else 
-                    Server.threadIdToClientHandler.get(Server.clientIdToThreadId.get(Integer.valueOf(receiver))).ci.updateSavAmount(money);
+            if (bankService.TransferQuerry(currUserID, money, acc, receiver)) {
+                SendMessage("TRANSFERRED");
+                
+                ClientHandler receiverHandler = Server.threadIdToClientHandler.get(Server.clientIdToThreadId.get(receiver));
+                receiverHandler.ci.updateCurrAmount(money);
+                if (acc.equals("current")) {
+                    ci.updateCurrAmount(-money);    
+                } else {
+                    ci.updateSavAmount(-money);
+                }
             }
-        } catch(CannotTransferException | NoAccountException e) {
+        } catch (CannotTransferException | NoAccountException e) {
             SendMessage(e.getMessage());
         }
     }
 
-    public void LoginClient(String username, String psswd) {
+    public void LoginClient(String username, String password) {
         try {
-            int a = 0;
-            if((a = bankService.QuerryLogin(username, psswd)) != 0) {
-                currUserID = a;
+            int userID = bankService.QuerryLogin(username, password);
+            if (userID != 0) {
+                currUserID = userID;
                 Server.clientIdToThreadId.put(currUserID, ThreadID);
-                System.out.println(currUserID);
+                System.out.println("Logged in as " + currUserID);
+
+                String info = GetClientInfo();
+                ci = new ClientInfo(info);
+                SendMessage("WELCOME/" + info + currUserID);
             }
-        } catch(CannotLoginException e) {
+        } catch (CannotLoginException e) {
             SendMessage(e.getMessage());
         }
     }
 
-    public void RegisterClient(String name, String psswd, String dob, String email, String checkAmnt, String savAmnt) {
-        System.out.println("Registering Client");
+    public void RegisterClient(String name, String password, String dob, String email, String checkAmnt, String savAmnt) {
         try {
-            if(bankService.QuerryRegister(name, psswd, dob, email, checkAmnt, savAmnt)) {
+            if (bankService.QuerryRegister(name, password, dob, email, checkAmnt, savAmnt)) {
                 SendMessage("REGISTERED");
             }
-        } catch(CannotRegisterException e) {
+        } catch (CannotRegisterException e) {
             SendMessage(e.getMessage());
         }
+    }
+
+    public void ClientDeposit(String account, int amount) {
+        try {
+            int newBalance = bankService.QuerryDeposit(currUserID, account, amount);
+            if ("CURRENT".equalsIgnoreCase(account)) {
+                ci.updateCurrAmount(amount);
+                SendMessage("DEPOSITED/CURRENT/" + ci.currAmount);
+            } else if ("SAVINGS".equalsIgnoreCase(account)) {
+                ci.updateSavAmount(amount);
+                SendMessage("DEPOSITED/SAVINGS/" + ci.savAmount);
+            }
+            System.out.println("Deposited " + amount + " to " + account + " account.");
+        } catch (CannotDepositException e) {
+            SendMessage(e.getMessage());
+        }
+    }
+
+    public void Updates() {
+        SendMessage("UPDATES/" + ci.currAmount + "/" + ci.savAmount);
     }
 
     public void handleLogout() {
         bankService.DeAuthenticateUser(currUserID);
-        SendMessage("Logged Out");
+        SendMessage("LOGGED_OUT");
+        ci = null;
+        currUserID = null;
+        System.out.println("Logged out user " + currUserID);
     }
 
     public String GetClientInfo() {
-        String info = bankService.QuerryClientInfo(currUserID);
-        return info;
+        return bankService.QuerryClientInfo(currUserID);
     }
-    public void ClientDeposit(String acc, int amnt) {
-        System.out.println("depositing");
-        try {
-            int a = 0;
-            switch(acc) {
-                case "CURRENT":
-                    a = bankService.QuerryDeposit(currUserID ,"current", amnt);
-                    ci.updateCurrAmount(amnt);
-                    SendMessage("DEPOSITED/" + acc + "/" + Integer.toString(ci.currAmount) + "/");
-                    break;
-                case "SAVINGS":
-                    a = bankService.QuerryDeposit(currUserID ,"savings", amnt);
-                    ci.updateSavAmount(amnt);
-                    SendMessage("DEPOSITED/" + acc + "/" + Integer.toString(ci.savAmount) + "/");
-                    break;
-            }
-        } catch(CannotDepositException e) {
-            SendMessage(e.getMessage());
-        }
+
+    public void SendMessage(String message) {
+        out.println(message);
+        System.out.println("Sent: " + message);
     }
-    public void handleWithdraw(String psswd, Double amnt) {} 
 }
