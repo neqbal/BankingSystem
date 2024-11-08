@@ -23,7 +23,7 @@ import javafx.scene.input.MouseEvent;
 import javafx.stage.Stage;
 
 public class UserController {
-
+    
     @FXML private TextField usernameInput;
     @FXML private PasswordField psswdInput;
     @FXML private PasswordField confpsswdInput;
@@ -79,9 +79,13 @@ public class UserController {
                 break;
             case "LOGIN":
                 try {
-                    client.SendMessage("LOGIN/" + LoginCreds(), null);
+                    String loginCredentials = LoginCreds();
+                    if(loginCredentials != null)
+                        client.SendMessage("LOGIN/" + loginCredentials, null);
                     String str[] = client.ReadFromSocket().split("/");
                     if(str[0].equals("WELCOME")) {
+                        client.ui.setUserName(str[1]);
+                        client.ui.setUserId(str[6]);
                         displayDashBoard((Stage) ((Button) event.getSource()).getScene().getWindow(), str);
                         System.out.println("start listeneing");
                         if(checkAmnt != null && savAmnt != null)
@@ -90,6 +94,8 @@ public class UserController {
                         else 
                             System.out.println("fuck you");
 
+                    } else {
+                        displayError(str[0]);
                     }
                 } catch(EmptyFieldException e) {
                     displayError(e.getMessage());
@@ -147,32 +153,80 @@ public class UserController {
             
             case "TRANSFER":
             {
-                String money = amountInput.getText();
-                String acc = accountComboBox.getValue();
-                String rec = receiver.getText();
-                client.SendMessage("TRANSFER/", money + "/" + acc + "/" + rec + "/");
-                String str = client.ReadFromSocket();
-                if(str != null && str.equals("TRANSFERED")) {
-                    displaySuccess(str);
-                } else {
-                    displayError("Cannot transfer");
+                try {
+                    TransferAmount();
+                } catch(EmptyFieldException e) {
+                    displayError(e.getMessage());
                 }
+
             }
                 break;
+
+            case "LOGOUT":
+                client.SendMessage("LOGOUT", null);
+                if(client.ReadFromSocket().equals("LOGGED_OUT")) {
+                    FXMLLoader fxmlLoader = new FXMLLoader(client.class.getResource("login.fxml"));
+                }
+                break;
+            
+            case "WITHDRAW":
+                try{
+                    WithdrawAmount();
+                } catch(EmptyFieldException e) {
+                    displayError(e.getMessage());
+                }
         }
     }
+    
+    public void WithdrawAmount() throws EmptyFieldException {
+        if(amountInput.getText().isEmpty() && accountComboBox.getValue() == null) {
+            throw new EmptyFieldException("please fill in all the fields");
+        }
 
+        String money = amountInput.getText();
+        String acc = accountComboBox.getValue();
+
+        client.SendMessage("WITHDRAW/", money+"/"+acc+"/");
+        String str = client.ReadFromSocket();
+
+    }
+    public void TransferAmount() throws EmptyFieldException {
+        if(amountInput.getText().isEmpty() && accountComboBox.getValue() == null && receiver.getText().isEmpty()) {
+            throw new EmptyFieldException("please fill in all the fields");
+        } 
+
+        if(receiver.getText().equals(client.ui.userID)) {
+            displayError("Cannot transfer to this account");
+            return;
+        }
+
+        String money = amountInput.getText();
+        String acc = accountComboBox.getValue();
+        String rec = receiver.getText();
+        client.SendMessage("TRANSFER/", money + "/" + acc + "/" + rec + "/");
+        String str = client.ReadFromSocket();
+        if(str != null && str.equals("TRANSFERRED")) {
+            displaySuccess(str);
+        } else {
+            displayError(str);
+        }
+    }
     public void startListening() {
         ScheduledExecutorService ses = Executors.newScheduledThreadPool(1);
+        
         ses.scheduleAtFixedRate(() -> {
+            boolean running = true;
             String updates = null;
             System.out.println("requesting updates");
             client.SendMessage("UPDATES", null);
             updates = client.ReadFromSocket();
+            if(updates == null) {
+                System.out.println("Closing the listeneing thread");
+                ses.shutdownNow();
+            }
             String parts[] = updates.split("/");
 
             refreshDashBoard(parts[1], parts[2]);
-
         }, 0, 5, TimeUnit.SECONDS);
     }
 
@@ -213,6 +267,8 @@ public class UserController {
             c.email.setText(str[3]);
             c.checkAmnt.setText(str[4]);
             c.savAmnt.setText(str[5]);
+
+            System.out.println("printing user info" + client.ui.username + client.ui.userID);
             // Create a new scene with the loaded FXML layout
             c.startListening();
             Scene homePageScene = new Scene(homePageRoot);
@@ -289,39 +345,3 @@ public class UserController {
     }
 }
 
-class User {
-    String username;
-    String psswd;
-
-    User(String username, String psswd) {
-        this.username = username;
-        this.psswd = psswd;
-    }
-
-    @Override
-    public String toString() {
-        return username + '/' + psswd + '/';
-    }
-}
-
-class RegisterUser {
-    String username;
-    String psswd;
-    String date;
-    String email;
-    String checkAmount;
-    String savAmount;
-    RegisterUser(String username, String psswd, String date, String email, String checkAmount, String savAmount) {
-        this.username = username;
-        this.psswd = psswd;
-        this.date = date;
-        this.email = email;
-        this.checkAmount = checkAmount;
-        this.savAmount = savAmount;
-    }
-
-    @Override
-    public String toString() {
-        return username + '/' + psswd + "/" + date.replaceAll("\\/", "\\-") + "/" + email + "/" + checkAmount + "/" + savAmount + "/";
-    }
-}

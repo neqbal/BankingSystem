@@ -15,6 +15,7 @@ import javafx.stage.Stage;
 public class client extends Application{
     static BufferedReader in;
     static PrintWriter out;
+    static UserInfo ui = new UserInfo();
     Socket s;
     private static Scene scene;
     private static Object lock = new Object();
@@ -81,4 +82,22 @@ public class client extends Application{
         System.out.println("Request sent");
     }
 
+}
+
+class UserInfo {
+    String username;
+    String userID;
+    UserInfo(){}
+    UserInfo(String username, String userID) {
+        this.userID = userID;
+        this.username = username;
+    }
+
+    public void setUserName(String name) {
+        this.username = name;
+    }
+
+    public void setUserId(String id) {
+        this.userID = id;
+    }
 }
