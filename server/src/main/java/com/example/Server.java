@@ -212,7 +212,7 @@ class ClientHandler implements Runnable {
 
     public void ClientDeposit(String account, int amount) {
         try {
-            int newBalance = bankService.QuerryDeposit(currUserID, account, amount);
+            bankService.QuerryDeposit(currUserID, account, amount);
             if ("CURRENT".equalsIgnoreCase(account)) {
                 ci.updateCurrAmount(amount);
                 SendMessage("DEPOSITED/CURRENT/" + ci.currAmount);
